@@ -311,7 +311,7 @@
                             <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">SOS</span>
                         </div>
                         <p class="text-xs text-gray-600"><span class="font-semibold">Loc:</span> ${log.location}</p>
-                        ${log.isSimulated ? '<p class="text-[10px] text-gray-400 uppercase">Simulated (Local Mode)</p>' : ''}
+                        ${log.isSimulated ? '<p class="text-[10px] text-gray-400 uppercase text-red-500 font-bold">' + log.simulatedReason + '</p>' : ''}
                     `;
                     ui.alertLogList.appendChild(div);
                 });
@@ -401,25 +401,61 @@
                 return;
             }
 
-            // Get Location (Live or Fake)
+            if (EMAILJS_PUBLIC_KEY === "YOUR_PUBLIC_KEY") {
+                 showFeedback("Error: EmailJS Keys not configured in code!", "error");
+                 return;
+            }
+
+            // Disable button while searching
+            ui.triggerAlertBtn.disabled = true;
+            ui.triggerAlertBtn.innerHTML = '<div class="loading-spinner"></div> Locating...';
+
+            // Get Location with high accuracy
             navigator.geolocation.getCurrentPosition((pos) => {
-                 processAlert(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`, false);
+                 // Success: Got real location
+                 processAlert(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`, false, null);
             }, (err) => {
+                 // Error Handling
+                 let errorMsg = "GPS Signal Lost";
+                 if (err.code === 1) errorMsg = "Location Permission Denied";
+                 if (err.code === 3) errorMsg = "GPS Timeout";
+                 
                  const fakeLat = (24.89 + (Math.random() * 0.01)).toFixed(5); 
                  const fakeLon = (91.86 + (Math.random() * 0.01)).toFixed(5);
-                 processAlert(`${fakeLat}, ${fakeLon}`, true);
-            }, { timeout: 4000 });
+                 processAlert(`${fakeLat}, ${fakeLon}`, true, errorMsg);
+            }, { 
+                enableHighAccuracy: true, 
+                timeout: 10000, // Wait 10 seconds
+                maximumAge: 0 
+            });
 
-            function processAlert(location, isSimulated) {
-                const logEntry = { timestamp: new Date().toISOString(), location: location, isSimulated: isSimulated };
+            function processAlert(location, isSimulated, reason) {
+                const logEntry = { 
+                    timestamp: new Date().toISOString(), 
+                    location: location, 
+                    isSimulated: isSimulated,
+                    simulatedReason: reason
+                };
                 appState.alertLogs.push(logEntry);
                 saveData();
 
                 ui.alertLocation.textContent = location;
-                ui.locationNote.textContent = isSimulated ? "(Simulated Location)" : "(Live GPS Location)";
+                if (isSimulated) {
+                    ui.locationNote.textContent = `(Simulated - ${reason})`;
+                    ui.locationNote.classList.add('text-yellow-300');
+                } else {
+                    ui.locationNote.textContent = "(Live GPS Location)";
+                    ui.locationNote.classList.remove('text-yellow-300');
+                }
+                
                 ui.alertModal.classList.add('active');
                 ui.emailStatus.innerHTML = '<div class="loading-spinner inline-block w-3 h-3 mr-2"></div> Sending emails...';
                 ui.emailStatus.className = "mt-4 p-2 bg-blue-900/50 rounded text-sm text-blue-200";
+
+                // Reset button
+                ui.triggerAlertBtn.disabled = false;
+                ui.triggerAlertBtn.innerHTML = '<i data-lucide="radio" class="h-6 w-6"></i> SEND EMERGENCY ALERT';
+                lucide.createIcons();
 
                 // Filter contacts with valid emails
                 const contactsWithEmail = appState.contacts.filter(c => c.email && c.email.includes('@'));
