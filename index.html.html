@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Emergency Alert System (SEAS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- EMAILJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <!-- Modals -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center transform scale-95 transition-transform duration-300">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Confirm Deletion</h3>
+            <p class="text-gray-600 mb-6">Are you sure you want to delete this contact?</p>
+            <div class="flex space-x-4">
+                <button id="confirm-delete-btn" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 transition duration-300">Delete</button>
+                <button id="cancel-delete-btn" class="w-full bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg shadow-md hover:bg-gray-400 transition duration-300">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reset-modal" class="modal-overlay">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center transform scale-95 transition-transform duration-300">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Reset Application?</h3>
+            <p class="text-gray-600 mb-6">This will delete all data from this browser.</p>
+            <div class="flex space-x-4">
+                <button id="confirm-reset-btn" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 transition duration-300">Reset</button>
+                <button id="cancel-reset-btn" class="w-full bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg shadow-md hover:bg-gray-400 transition duration-300">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="alert-modal" class="modal-overlay flex-col !bg-red-900/90 text-white p-8 space-y-8">
+        <div class="text-center animate-pulse">
+            <h3 class="text-5xl font-extrabold mb-2 text-red-200">EMERGENCY</h3>
+            <p class="text-2xl font-medium">EMAILS SENDING...</p>
+        </div>
+        <div class="text-center bg-black/20 p-4 rounded-lg max-w-md w-full">
+            <p id="alert-location" class="text-2xl sm:text-3xl font-mono font-bold text-white tracking-tighter"></p>
+            <p id="location-note" class="text-xs text-red-300 italic mt-1"></p>
+            <div id="email-status" class="mt-4 p-2 bg-black/40 rounded text-sm text-yellow-200">
+                Attempting to send emails...
+            </div>
+        </div>
+        
+        <button id="ok-alert-btn" class="bg-white text-red-600 font-bold py-3 px-8 rounded-lg shadow-md hover:bg-gray-200 transition transform hover:scale-105">CLOSE</button>
+    </div>
+
+    <div class="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+        <div class="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 p-6 sm:p-10">
+            
+            <!-- Left Column: Profile & Contacts -->
+            <div>
+                <div class="mb-8">
+                    <h1 class="text-5xl font-extrabold text-gray-900 mb-1">SEAS</h1>
+                    <p class="text-xl text-gray-500">Personal Emergency Alert System</p>
+                </div>
+
+                <!-- User Profile -->
+                <div class="bg-gray-50 p-6 rounded-2xl shadow-inner mb-6">
+                    <h2 class="text-2xl font-bold text-gray-700 mb-4">User Profile</h2>
+                    <form id="profile-form" class="space-y-4">
+                        <input type="text" id="name" class="w-full rounded-lg border-gray-300 p-3" placeholder="Full Name" required>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="number" id="age" class="w-full rounded-lg border-gray-300 p-3" placeholder="Age">
+                            <select id="blood-group" class="w-full rounded-lg border-gray-300 p-3 bg-white">
+                                <option value="" disabled selected>Blood Group</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                            </select>
+                        </div>
+                        <textarea id="medical-conditions" rows="3" class="w-full rounded-lg border-gray-300 p-3" placeholder="Medical Conditions"></textarea>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition transform hover:scale-105 flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="h-5 w-5"></i> Save Profile
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Emergency Contacts -->
+                <div class="bg-gray-50 p-6 rounded-2xl shadow-inner">
+                    <h2 class="text-2xl font-bold text-gray-700 mb-4">Emergency Contacts</h2>
+                    <form id="contact-form" class="space-y-4 mb-4">
+                        <input type="text" id="contact-name" class="w-full rounded-lg border-gray-300 p-3" placeholder="Contact's Name" required>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="text" id="contact-relation" class="w-full rounded-lg border-gray-300 p-3" placeholder="Relation">
+                            <input type="tel" id="contact-phone" class="w-full rounded-lg border-gray-300 p-3" placeholder="Phone Number" required>
+                        </div>
+                        <input type="email" id="contact-email" class="w-full rounded-lg border-gray-300 p-3" placeholder="Email Address (Required for Alerts)">
+                        <div id="contact-buttons" class="flex space-x-2">
+                            <button type="submit" id="add-contact-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition transform hover:scale-105 flex items-center justify-center gap-2">
+                                <i data-lucide="user-plus" class="h-5 w-5"></i> Add Contact
+                            </button>
+                            <button type="button" id="cancel-btn" class="hidden w-full bg-gray-400 text-white font-bold py-3 rounded-lg shadow-md hover:bg-gray-500 transition flex items-center justify-center">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                    <div id="contact-list" class="space-y-3 mt-4 max-h-60 overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+
+            <!-- Right Column: Dashboard, Alert, Log -->
+            <div class="flex flex-col">
+                 <div id="dashboard-summary" class="bg-gray-50 p-6 rounded-2xl shadow-inner mb-6">
+                    <h2 class="text-2xl font-bold text-gray-700 mb-4">Dashboard</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                        <div class="p-4 bg-white rounded-lg shadow">
+                            <i data-lucide="user-circle" class="mx-auto h-8 w-8 text-blue-500 mb-2"></i>
+                            <p id="dashboard-name" class="text-xl font-bold text-gray-800 truncate">Guest</p>
+                        </div>
+                        <div class="p-4 bg-white rounded-lg shadow">
+                            <i data-lucide="contact" class="mx-auto h-8 w-8 text-green-500 mb-2"></i>
+                            <p id="dashboard-contacts" class="text-xl font-bold text-gray-800">0</p>
+                        </div>
+                        <div class="p-4 bg-white rounded-lg shadow">
+                           <i data-lucide="siren" class="mx-auto h-8 w-8 text-red-500 mb-2"></i>
+                            <p id="dashboard-alerts" class="text-xl font-bold text-gray-800">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-red-50 border-2 border-red-200 p-6 rounded-2xl shadow-inner mb-6">
+                    <h2 class="text-2xl font-bold text-red-700 mb-2">Trigger Alert</h2>
+                    <p class="text-gray-600 mb-4">Send automatic emails with GPS to all contacts.</p>
+                    <button type="button" id="trigger-alert-btn" class="w-full bg-red-600 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-red-700 transition transform hover:scale-105 flex items-center justify-center gap-2">
+                        <i data-lucide="radio" class="h-6 w-6"></i>
+                        SEND EMERGENCY ALERT
+                    </button>
+                </div>
+                
+                <div class="bg-gray-50 p-6 rounded-2xl shadow-inner flex-grow flex flex-col">
+                    <h2 class="text-2xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+                        <i data-lucide="history" class="h-6 w-6"></i> Alert Log
+                    </h2>
+                    <div id="alert-log-list" class="space-y-4 text-sm text-gray-600 overflow-y-auto flex-grow font-mono bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64"></div>
+                </div>
+                
+                <div class="mt-6">
+                    <button id="reset-app-btn" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition flex items-center justify-center gap-2">
+                        <i data-lucide="rotate-ccw" class="h-5 w-5"></i> Reset Application
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="feedback-message" class="fixed bottom-8 right-8 bg-gray-900 text-white px-6 py-3 rounded-full shadow-lg transform translate-y-20 opacity-0 transition-all duration-500 ease-in-out flex items-center gap-3 z-50">
+        <span id="feedback-icon-container"><i data-lucide="check-circle" class="h-5 w-5 text-green-400"></i></span>
+        <span id="feedback-text"></span>
+    </div>
+
+    <script>
+        // --- EMAILJS CONFIGURATION (KEYS INSERTED) ---
+        const EMAILJS_PUBLIC_KEY = "Y7_WB6M0iwLYJF0rm"; 
+        const EMAILJS_SERVICE_ID = "service_41tlns6"; 
+        const EMAILJS_TEMPLATE_ID = "template_ujt1kfl"; 
+
+        // Initialize EmailJS
+        (function(){
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        })();
+
+        // --- INITIALIZATION ---
+        lucide.createIcons();
+
+        let appState = {
+            profile: { name: '', age: '', bloodGroup: '', medicalConditions: '' },
+            contacts: [],
+            alertLogs: []
+        };
+        let editingIndex = null;
+        let deleteIndex = null;
+
+        const ui = {
+            deleteModal: document.getElementById('delete-modal'),
+            resetModal: document.getElementById('reset-modal'),
+            alertModal: document.getElementById('alert-modal'),
+            alertLocation: document.getElementById('alert-location'),
+            locationNote: document.getElementById('location-note'),
+            emailStatus: document.getElementById('email-status'),
+            dashboardName: document.getElementById('dashboard-name'),
+            dashboardContacts: document.getElementById('dashboard-contacts'),
+            dashboardAlerts: document.getElementById('dashboard-alerts'),
+            feedbackMessage: document.getElementById('feedback-message'),
+            feedbackIconContainer: document.getElementById('feedback-icon-container'),
+            feedbackText: document.getElementById('feedback-text'),
+            profileForm: document.getElementById('profile-form'),
+            nameInput: document.getElementById('name'),
+            ageInput: document.getElementById('age'),
+            bloodGroupInput: document.getElementById('blood-group'),
+            medicalConditionsInput: document.getElementById('medical-conditions'),
+            contactForm: document.getElementById('contact-form'),
+            contactNameInput: document.getElementById('contact-name'),
+            contactRelationInput: document.getElementById('contact-relation'),
+            contactPhoneInput: document.getElementById('contact-phone'),
+            contactEmailInput: document.getElementById('contact-email'),
+            addContactBtn: document.getElementById('add-contact-btn'),
+            cancelBtn: document.getElementById('cancel-btn'),
+            triggerAlertBtn: document.getElementById('trigger-alert-btn'),
+            contactList: document.getElementById('contact-list'),
+            alertLogList: document.getElementById('alert-log-list'),
+        };
+
+        function loadData() {
+            const savedData = localStorage.getItem('seas_data');
+            if (savedData) {
+                appState = JSON.parse(savedData);
+                ui.nameInput.value = appState.profile.name || '';
+                ui.ageInput.value = appState.profile.age || '';
+                ui.bloodGroupInput.value = appState.profile.bloodGroup || '';
+                ui.medicalConditionsInput.value = appState.profile.medicalConditions || '';
+            }
+            renderAll();
+        }
+
+        function saveData() {
+            localStorage.setItem('seas_data', JSON.stringify(appState));
+            renderAll();
+        }
+
+        function renderAll() {
+            ui.dashboardName.textContent = appState.profile.name || 'Guest';
+            ui.dashboardContacts.textContent = appState.contacts.length;
+            ui.dashboardAlerts.textContent = appState.alertLogs.length;
+
+            ui.contactList.innerHTML = '';
+            if (appState.contacts.length === 0) {
+                ui.contactList.innerHTML = '<div class="text-gray-400 text-center italic py-4">No contacts added yet</div>';
+            } else {
+                appState.contacts.forEach((contact, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between border border-gray-100 hover:border-blue-200 transition';
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${contact.name} <span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">${contact.relation || 'Other'}</span></p>
+                            <div class="flex items-center gap-3 mt-1">
+                                <p class="text-xs text-gray-500 flex items-center gap-1"><i data-lucide="phone" class="h-3 w-3"></i> ${contact.phone}</p>
+                                ${contact.email ? `<p class="text-xs text-gray-500 flex items-center gap-1"><i data-lucide="mail" class="h-3 w-3"></i> ${contact.email}</p>` : '<span class="text-xs text-red-400 flex items-center gap-1"><i data-lucide="alert-circle" class="h-3 w-3"></i> No Email</span>'}
+                            </div>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button onclick="editContact(${index})" class="text-blue-500 hover:bg-blue-50 p-2 rounded-md transition"><i data-lucide="pencil" class="h-4 w-4"></i></button>
+                            <button onclick="promptDelete(${index})" class="text-red-500 hover:bg-red-50 p-2 rounded-md transition"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                        </div>
+                    `;
+                    ui.contactList.appendChild(div);
+                });
+            }
+
+            ui.alertLogList.innerHTML = '';
+            if (appState.alertLogs.length === 0) {
+                ui.alertLogList.innerHTML = '<div class="text-gray-400 text-center italic py-8">No alerts sent yet</div>';
+            } else {
+                [...appState.alertLogs].reverse().forEach(log => {
+                    const div = document.createElement('div');
+                    div.className = 'pb-3 border-b border-gray-100 last:border-0';
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-bold text-gray-800 text-xs">${new Date(log.timestamp).toLocaleString()}</span>
+                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">SOS</span>
+                        </div>
+                        <p class="text-xs text-gray-600"><span class="font-semibold">Loc:</span> ${log.location}</p>
+                        ${log.isSimulated ? '<p class="text-[10px] text-gray-400 uppercase">Simulated (Local Mode)</p>' : ''}
+                    `;
+                    ui.alertLogList.appendChild(div);
+                });
+            }
+            lucide.createIcons();
+        }
+
+        ui.profileForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            appState.profile = {
+                name: ui.nameInput.value.trim(),
+                age: ui.ageInput.value,
+                bloodGroup: ui.bloodGroupInput.value,
+                medicalConditions: ui.medicalConditionsInput.value.trim()
+            };
+            saveData();
+            showFeedback('Profile saved successfully!');
+        });
+
+        ui.contactForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newContact = {
+                name: ui.contactNameInput.value.trim(),
+                relation: ui.contactRelationInput.value.trim(),
+                phone: ui.contactPhoneInput.value.trim(),
+                email: ui.contactEmailInput.value.trim()
+            };
+
+            if (editingIndex !== null) {
+                appState.contacts[editingIndex] = newContact;
+                showFeedback('Contact updated!');
+                editingIndex = null;
+                ui.addContactBtn.innerHTML = '<i data-lucide="user-plus" class="h-5 w-5"></i> Add Contact';
+                ui.addContactBtn.classList.replace('bg-blue-600', 'bg-green-600');
+                ui.addContactBtn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+                ui.cancelBtn.classList.add('hidden');
+            } else {
+                appState.contacts.push(newContact);
+                showFeedback('Contact added!');
+            }
+            ui.contactForm.reset();
+            saveData();
+        });
+
+        window.editContact = (index) => {
+            editingIndex = index;
+            const c = appState.contacts[index];
+            ui.contactNameInput.value = c.name;
+            ui.contactRelationInput.value = c.relation;
+            ui.contactPhoneInput.value = c.phone;
+            ui.contactEmailInput.value = c.email;
+            ui.addContactBtn.innerHTML = '<i data-lucide="save" class="h-5 w-5"></i> Update';
+            ui.addContactBtn.classList.replace('bg-green-600', 'bg-blue-600');
+            ui.addContactBtn.classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
+            ui.cancelBtn.classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        window.promptDelete = (index) => {
+            deleteIndex = index;
+            ui.deleteModal.classList.add('active');
+            ui.deleteModal.querySelector('div').classList.add('scale-100');
+        };
+
+        ui.cancelBtn.addEventListener('click', () => {
+            editingIndex = null;
+            ui.contactForm.reset();
+            ui.addContactBtn.innerHTML = '<i data-lucide="user-plus" class="h-5 w-5"></i> Add Contact';
+            ui.addContactBtn.classList.replace('bg-blue-600', 'bg-green-600');
+            ui.addContactBtn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+            ui.cancelBtn.classList.add('hidden');
+            lucide.createIcons();
+        });
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+            if (deleteIndex !== null) {
+                appState.contacts.splice(deleteIndex, 1);
+                saveData();
+                showFeedback('Contact deleted.');
+                hideModals();
+            }
+        });
+
+        ui.triggerAlertBtn.addEventListener('click', () => {
+            if (!appState.profile.name) {
+                showFeedback('Please save your profile first.', 'error');
+                return;
+            }
+
+            // Get Location (Live or Fake)
+            navigator.geolocation.getCurrentPosition((pos) => {
+                 processAlert(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`, false);
+            }, (err) => {
+                 const fakeLat = (24.89 + (Math.random() * 0.01)).toFixed(5); 
+                 const fakeLon = (91.86 + (Math.random() * 0.01)).toFixed(5);
+                 processAlert(`${fakeLat}, ${fakeLon}`, true);
+            }, { timeout: 4000 });
+
+            function processAlert(location, isSimulated) {
+                const logEntry = { timestamp: new Date().toISOString(), location: location, isSimulated: isSimulated };
+                appState.alertLogs.push(logEntry);
+                saveData();
+
+                ui.alertLocation.textContent = location;
+                ui.locationNote.textContent = isSimulated ? "(Simulated Location)" : "(Live GPS Location)";
+                ui.alertModal.classList.add('active');
+                ui.emailStatus.innerHTML = '<div class="loading-spinner inline-block w-3 h-3 mr-2"></div> Sending emails...';
+                ui.emailStatus.className = "mt-4 p-2 bg-blue-900/50 rounded text-sm text-blue-200";
+
+                // Filter contacts with valid emails
+                const contactsWithEmail = appState.contacts.filter(c => c.email && c.email.includes('@'));
+
+                if (contactsWithEmail.length === 0) {
+                     ui.emailStatus.textContent = "Alert logged, but no valid email contacts found.";
+                     ui.emailStatus.className = "mt-4 p-2 bg-red-900/50 rounded text-sm text-red-200";
+                     return;
+                }
+
+                // Loop and send email to each contact
+                let successCount = 0;
+                let failCount = 0;
+                const total = contactsWithEmail.length;
+
+                contactsWithEmail.forEach(contact => {
+                    const templateParams = {
+                        to_name: contact.name,
+                        to_email: contact.email,
+                        user_name: appState.profile.name,
+                        location: location,
+                        maps_link: `https://www.google.com/maps?q=${location}`,
+                        medical_info: `Blood: ${appState.profile.bloodGroup || 'N/A'}, Conditions: ${appState.profile.medicalConditions || 'None'}`
+                    };
+
+                    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+                        .then(() => {
+                            successCount++;
+                            checkDone();
+                        }, (error) => {
+                            console.error('FAILED...', error);
+                            failCount++;
+                            checkDone();
+                        });
+                });
+
+                function checkDone() {
+                    if (successCount + failCount === total) {
+                        if (failCount === 0) {
+                             ui.emailStatus.innerHTML = `<i data-lucide="check" class="inline w-4 h-4 mr-1"></i> Sent to ${successCount} contacts!`;
+                             ui.emailStatus.className = "mt-4 p-2 bg-green-900/50 rounded text-sm text-green-200 font-bold";
+                        } else {
+                             ui.emailStatus.innerHTML = `Sent: ${successCount}, Failed: ${failCount}. Check console.`;
+                             ui.emailStatus.className = "mt-4 p-2 bg-yellow-900/50 rounded text-sm text-yellow-200";
+                        }
+                        lucide.createIcons();
+                    }
+                }
+            }
+        });
+
+        document.getElementById('reset-app-btn').addEventListener('click', () => {
+            ui.resetModal.classList.add('active');
+            ui.resetModal.querySelector('div').classList.add('scale-100');
+        });
+
+        document.getElementById('confirm-reset-btn').addEventListener('click', () => {
+            localStorage.removeItem('seas_data');
+            appState = { profile: {}, contacts: [], alertLogs: [] };
+            ui.profileForm.reset();
+            ui.contactForm.reset();
+            renderAll();
+            hideModals();
+            showFeedback('App reset successfully.');
+        });
+
+        function hideModals() {
+            document.querySelectorAll('.modal-overlay').forEach(m => {
+                m.classList.remove('active');
+                if(m.querySelector('div')) m.querySelector('div').classList.remove('scale-100');
+            });
+            deleteIndex = null;
+        }
+
+        document.querySelectorAll('#cancel-delete-btn, #cancel-reset-btn, #ok-alert-btn').forEach(btn => {
+            btn.addEventListener('click', hideModals);
+        });
+
+        function showFeedback(msg, type = 'success') {
+            ui.feedbackText.textContent = msg;
+            const iconName = type === 'success' ? 'check-circle' : 'alert-triangle';
+            const color = type === 'success' ? 'text-green-400' : 'text-red-400';
+            ui.feedbackIconContainer.innerHTML = `<i data-lucide="${iconName}" class="h-5 w-5 ${color}"></i>`;
+            lucide.createIcons();
+            ui.feedbackMessage.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => ui.feedbackMessage.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
