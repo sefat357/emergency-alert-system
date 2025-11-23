@@ -34,11 +34,6 @@ This project demonstrates the integration of modern web technologies, real-time 
 4. **Trigger Alert:** In an emergency, click the large red **"SEND EMERGENCY ALERT"** button.  
 5. **Confirmation:** The app will locate you and send emails automatically. A confirmation modal will appear with your detected location.
 
-## **📸 Screenshots**
-
-| Dashboard | Alert Triggered | Email Received |
-| :---- | :---- | :---- |
-| *(You can upload your screenshots to an 'images' folder and link them here)* | ... | ... |
 
 ## **🔮 Future Improvements**
 
